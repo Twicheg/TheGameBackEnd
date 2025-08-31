@@ -1,0 +1,9 @@
+CORS_ORIGINS=http://0.0.0.0:8000,http://127.0.0.1:8000
+DATABASE_TYPE=sqllite/postgresql
+DB_NAME=game
+DB_HOST=
+DB_PORT=
+DB_USER=
+DB_PASSWORD=
+DEBUG=1/0
+SECRET_KEY = 'django-insecure-xt3+y%*8*nbh)g8*#4l#e5#8v*5v$kmoid#b7#mmr@t*o)42(g'
