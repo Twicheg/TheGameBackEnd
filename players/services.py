@@ -42,7 +42,7 @@ class PlayerService(BaseService):
             assert await player.check_boosts, "Player check-problem players.services.PlayerService.get_players"
             assert await player.remove_inactive, "Player remove-inactive problem players.services.PlayerService.get_players"
         except AssertionError as e:
-            logger.error("problem players.services.PlayerService.get_players", exc_info=e)
+            logger.error("problem players.services.PlayerService.get_players", exc_info=True)
             return
         return player
 
@@ -55,7 +55,7 @@ class PlayerService(BaseService):
                 return obj
             return obj
         except AttributeError as e:
-            logger.error("problem players.services.PlayerService.check_last_entry", exc_info=e)
+            logger.error("problem players.services.PlayerService.check_last_entry", exc_info=True)
 
 
 class BoostService(BaseService):
@@ -89,7 +89,7 @@ class BoostService(BaseService):
                 await session.post(url=url, json=data)
                 return True
         except aiohttp.client_exceptions.ClientResponseError as e:
-            logger.error("Can't buff player", exc_info=e)
+            logger.error("Can't buff player", exc_info=True)
 
 
 class PlayerLevelService(BaseService):
@@ -97,9 +97,11 @@ class PlayerLevelService(BaseService):
     @classmethod
     async def set_levels_to_fresh_player(cls, uuid: UUID) -> None:
         """Set first from order level to player"""
+        minimal = await cls.dao.get_minimal(cls._lvl_queryset, "order")
+        assert minimal , "Empty LeveL table"
         player_level = await cls.dao.acreate(cls._pll_queryset,
                                              player_id=uuid,
-                                             level_id=(await cls.dao.get_minimal(cls._lvl_queryset, "order")).id,
+                                             level_id=minimal.id,
                                              completed=datetime.now().date(),
                                              is_completed=False,
                                              )

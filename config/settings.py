@@ -35,17 +35,19 @@ STATIC_URL = 'static/'
 match os.getenv("DEBUG"):
     case "0":
         DEBUG = False
-        STATIC_ROOT = os.path.join(BASE_DIR, 'static')
         LOG_LEVEL = "WARNING"
     case "1":
         DEBUG = True
-        STATICFILES_DIRS = [
-                BASE_DIR / 'static',
-            ]
+
         LOG_LEVEL = "DEBUG"
 
 ALLOWED_HOSTS = ["*"]
 
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
+# STATICFILES_DIRS = [
+#     BASE_DIR / 'static',
+# ]
 
 LOGGING = {
     "version": 1,
@@ -118,23 +120,23 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if os.getenv("DATABASE_TYPE") == "postgresql":
+if os.getenv("DATABASE_TYPE") == "postgres":
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME'),
-            'USER': os.getenv('DB_USER'),
-            'PASSWORD': os.getenv('DB_PASSWORD'),
-            "HOST": os.getenv('DB_HOST'),
-            "PORT": os.getenv('DB_PORT'),
-
+            'NAME': os.getenv('POSTGRES_DB'),
+            'USER': os.getenv('POSTGRES_USER'),
+            'HOST': os.getenv('POSTGRES_HOST'),
+            'PORT': os.getenv('POSTGRES_PORT'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD'),
         }
     }
-elif os.getenv("DATABASE_TYPE") == "sqllite":
+else:
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': os.getenv('DB_NAME'),
+            'NAME':os.getenv('POSTGRES_DB')
         }
     }
 

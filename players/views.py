@@ -24,7 +24,10 @@ class PlayerCreateView(CreateAPIView):
         uuid = uuid4()
         request.data.update([('player_id', uuid)])
         resp = await super().post(request, *args, **kwargs)
-        await PlayerLevelService.set_levels_to_fresh_player(uuid)
+        try:
+            await PlayerLevelService.set_levels_to_fresh_player(uuid)
+        except AssertionError as e:
+            logger.error('The LeveL is empty',exc_info=True)
         return resp
 
 
@@ -85,6 +88,6 @@ class CSVApi(APIView):
             response['Content-Disposition'] = 'attachment; filename="players.csv"'
             return response
         except (ValueError, AssertionError) as e:
-            logger.error("Something goes wrong in CSVApi", exc_info=e)
+            logger.error("Something goes wrong in CSVApi", exc_info=True)
             return Response({False: "Сервис временно недоступен"}
                             , status=HTTP_503_SERVICE_UNAVAILABLE)

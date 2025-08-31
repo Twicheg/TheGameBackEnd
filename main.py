@@ -38,5 +38,9 @@ def run():
     StandaloneApplication("config.asgi:application", options).run()
 
 if __name__ == "__main__":
-    os.system("python manage.py migrate")
+    try:
+        os.system("python manage.py csu")
+        os.system("python manage.py collectstatic --no-input")
+    except Exception as e:
+        pass
     run()

@@ -36,7 +36,7 @@ class AsyncDAO:
         except (ObjectDoesNotExist, MultipleObjectsReturned) as e:
             if ignore_logger:
                 return
-            logger.error("Error players.DAO.AsyncDAO.get_one", exc_info=e)
+            logger.error("Error players.DAO.AsyncDAO.get_one", exc_info=True)
             return
 
     @staticmethod
@@ -52,7 +52,7 @@ class AsyncDAO:
         try:
             return queryset.get(**key)
         except (ObjectDoesNotExist, MultipleObjectsReturned) as e:
-            logger.error("Error players.DAO.AsyncDAO.get_one", exc_info=e)
+            logger.error("Error players.DAO.AsyncDAO.get_one", exc_info=True)
             return
 
     @staticmethod
