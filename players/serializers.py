@@ -51,7 +51,6 @@ class BoostCreateSerializer(Serializer):
 class PlayersListSerializer(ModelSerializer):
     boost = BoostSerializer(source="boosts", many=True, read_only=True)
     player_level = PlayerLevelSerializer(source='playerlevel_set', many=True, read_only=True)
-    player_levels = PlayerLevelSerializer(source='playerlevel_set', many=True, read_only=True)
     boost_required = serializers.SerializerMethodField()
 
 
