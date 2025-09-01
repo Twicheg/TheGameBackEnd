@@ -144,7 +144,7 @@ class PlayerLevelService(BaseService):
             assert current_level_player, "Player have not PlayerLevel"
 
             # фиксируем завершенный уровень
-            if current_level_player.is_completed == False:
+            if not current_level_player.is_completed:
                 the_need_to_issue_an_award = True
                 current_level_player.is_completed = True
 
@@ -165,8 +165,7 @@ class PlayerLevelService(BaseService):
                     return {"result": False, "description":
                         f"{player.player_id} {player.player_name} {str(e)}, но завершил {current_level_of_player.order} и"
                         f"получил {rewards_list} в награду "}
-                else:
-                    raise e
+                raise e
 
         except AssertionError as e:
             return {"result": False, "description":
