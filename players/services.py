@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import csv
+from sys import exc_info
+
 import pandas as pd
 import aiohttp
 from datetime import datetime
@@ -97,8 +99,15 @@ class PlayerLevelService(BaseService):
     @classmethod
     async def set_levels_to_fresh_player(cls, uuid: UUID) -> None:
         """Set first from order level to player"""
-        minimal = await cls.dao.get_minimal(cls._lvl_queryset, "order")
-        assert minimal , "Empty LeveL table"
+        try:
+            minimal = await cls.dao.get_minimal(cls._lvl_queryset, "order")
+            assert minimal, "Empty LeveL table"
+        except AssertionError:
+            logger.warning('The LeveL is empty', exc_info=True)
+            minimal = await cls.dao.acreate(cls._lvl_queryset,
+                                            title='The Zero Default Level',
+                                            order=0)
+
         player_level = await cls.dao.acreate(cls._pll_queryset,
                                              player_id=uuid,
                                              level_id=minimal.id,
@@ -114,40 +123,38 @@ class PlayerLevelService(BaseService):
 
         async def find_new_level(level: int) -> Optional[Model]:
             """Try to find level.order > that"""
-            for _ in range(10):
-                level = level + 1
-                new_level = await cls.dao.aget_one(cls._lvl_queryset, "order", level, ignore_logger=True)
-                if new_level:
-                    return new_level
-            else:
-                return
+
+            levels = [i.order for i in await cls.dao.aget_list(cls._lvl_queryset)]
+            assert any(filter(lambda x: x > level, levels)), "Player have max level"
+
+            for lvl in sorted(levels):
+                if lvl > level:
+                    return await cls.dao.aget_one(cls._lvl_queryset, "order", lvl, ignore_logger=True)
 
         player = await cls.dao.aget_one(cls._pl_queryset, Player, player_id)
         if player is None:
             raise NotFound
 
-        completed_player_level = await cls.dao.aget_one(player.playerlevel_set, "is_completed", False)
-        completed_player_level.is_completed = True
-        completed_player_level.completed = datetime.now().date()
-        finished_level_id = completed_player_level.level_id
-
-        player.player_score += completed_player_level.score
+        current_level = await cls.dao.aget_one(player.playerlevel_set, "is_completed", False)
+        current_level.is_completed = True
+        current_level.completed = datetime.now().date()
+        finished_level_id = current_level.level_id
+        await current_level.asave()
+        player.player_score += current_level.score
 
         current_order = await cls.dao.aget_one(cls._lvl_queryset, "id", finished_level_id)
 
-        new_level_model_or_None = await find_new_level(current_order.order)
-
-        if new_level_model_or_None is None:  # если уровня выше нет в кварисете Level
+        try:
+            new_level_model_or_None = await find_new_level(current_order.order)
+        except AssertionError:
             return {"result": False, "description":
                 f"{player.player_id} {player.player_name} на максимальном уровне"}
-
-        await completed_player_level.asave()
 
         new_level_rewards_queryset = await cls.dao.aget_list(new_level_model_or_None.levelprize_set)
         await cls.dao.acreate(cls._pll_queryset,
                               player=player,
                               level=new_level_model_or_None,
-                              completed=datetime.now().date(),  # null = False
+                              completed=datetime.now().date(),  # PlayerLevel.completed null = False
                               is_completed=False,
                               )
         rewards_list = []
