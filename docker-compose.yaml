@@ -22,14 +22,14 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready " ]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -p 5432 " ,]
       interval: 10s
       timeout: 10s
       retries: 2
 
   backend_game_service:
     build: .
-    command: bash -c "python manage.py migrate --no-input && python main.py"
+    command: bash -c "python manage.py migrate && python main.py"
     ports:
       - "8080:8000"
     volumes:
