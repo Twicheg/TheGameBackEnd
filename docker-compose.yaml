@@ -22,7 +22,7 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -p 5432 -h localhost -d postgres -U user" ]
+      test: [ "CMD-SHELL", "pg_isready " ]
       interval: 10s
       timeout: 10s
       retries: 2
