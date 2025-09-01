@@ -1,23 +1,24 @@
+import logging
+
 from asyncio import AbstractEventLoop
 from concurrent.futures.process import ProcessPoolExecutor
 from typing import Union, Optional, AsyncIterator, Callable, Any
 from asgiref.sync import sync_to_async
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
-import logging
 from concurrent.futures import ThreadPoolExecutor
 from django.db.models.base import ModelBase, Model
 from django.db.models import QuerySet
+from players.meta import StaticMethodMaker
 
 logger = logging.getLogger(__name__)
 
 
-class AsyncDAO:
-    @staticmethod
+class AsyncDAO(metaclass=StaticMethodMaker):
+
     async def acreate(queryset: QuerySet, **data) -> Model:
         obj = await queryset.acreate(**data)
         return obj
 
-    @staticmethod
     async def aget_one(queryset: QuerySet, search_field: Union[str, ModelBase], val: Union[str, bool],
                        ignore_logger: bool = False) -> Optional[Model]:
 
@@ -39,7 +40,6 @@ class AsyncDAO:
             logger.error("Error players.DAO.AsyncDAO.get_one", exc_info=True)
             return
 
-    @staticmethod
     def get_one(queryset: QuerySet, search_field: Union[str, ModelBase], val: Union[str, bool]) -> Optional[Model]:
         if isinstance(search_field, str):
             key = dict([(search_field, val)], )
@@ -55,23 +55,18 @@ class AsyncDAO:
             logger.error("Error players.DAO.AsyncDAO.get_one", exc_info=True)
             return
 
-    @staticmethod
     def get_list(queryset: QuerySet) -> QuerySet:
         return queryset.all()
 
-    @staticmethod
     async def aget_count(queryset: QuerySet) -> int:
         return await sync_to_async(queryset.count)()
 
-    @staticmethod
     async def aget_list_iterator(queryset: QuerySet, chuck: int = 50) -> Union[list, AsyncIterator[QuerySet]]:
         return queryset.aiterator(chunk_size=chuck)
 
-    @staticmethod
     async def aget_list(queryset: QuerySet) -> QuerySet:
         return await sync_to_async(queryset.all)()
 
-    @staticmethod
     async def aget_filtered_list(queryset: QuerySet, search_field: Union[str, ModelBase] = None,
                                  val: str = None) -> QuerySet:
         if isinstance(search_field, str):
@@ -84,16 +79,14 @@ class AsyncDAO:
 
         return await sync_to_async(queryset.filter)(**key)
 
-    @staticmethod
     async def get_minimal(queryset: QuerySet, sort_field: str) -> QuerySet:
         obj = await queryset.order_by(sort_field).afirst()
         return obj
 
-    @staticmethod
     async def aget_last(queryset: QuerySet,
-                 search_field: Union[str, Model] = None,
-                 val: str = None,
-                 order: Optional[str] = None) -> ModelBase:
+                        search_field: Union[str, Model] = None,
+                        val: str = None,
+                        order: Optional[str] = None) -> ModelBase:
         if val and search_field:
             if isinstance(search_field, str):
                 key = dict([(search_field, val)], )
@@ -110,19 +103,15 @@ class AsyncDAO:
         else:
             return await queryset.order_by(order).alast()
 
-    @staticmethod
     async def aget_sorted(queryset: QuerySet,
                           order: Optional[str] = None) -> QuerySet:
         return await sync_to_async(queryset.order_by, thread_sensitive=True)(order)
 
-    @staticmethod
     def t_pool(func: Callable, *arg) -> Any:
         with ThreadPoolExecutor(max_workers=1) as executor:
             res = executor.submit(func, *arg)
             return res.result()
 
-
-    @staticmethod
     async def async_processes_work(loop: AbstractEventLoop, func: Callable, *arg) -> Any:
         with ProcessPoolExecutor() as executor:
             if not arg:
