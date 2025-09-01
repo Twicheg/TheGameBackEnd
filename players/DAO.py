@@ -90,23 +90,25 @@ class AsyncDAO:
         return obj
 
     @staticmethod
-    def get_last(queryset: QuerySet,
-                 search_field: Union[str, Model],
-                 pk: str,
+    async def aget_last(queryset: QuerySet,
+                 search_field: Union[str, Model] = None,
+                 val: str = None,
                  order: Optional[str] = None) -> ModelBase:
+        if val and search_field:
+            if isinstance(search_field, str):
+                key = dict([(search_field, val)], )
 
-        if isinstance(search_field, str):
-            key = dict([(search_field, pk)], )
+            elif isinstance(search_field, ModelBase):
+                key = dict([(search_field._meta.pk_fields[0].__dict__.get("name"), val)], )
 
-        elif isinstance(search_field, ModelBase):
-            key = dict([(search_field._meta.pk_fields[0].__dict__.get("name"), pk)], )
-
+            else:
+                return
+            if order:
+                return await queryset.filter(**key).order_by(f"{order}").last()
+            else:
+                return await queryset.filter(**key).alast()
         else:
-            return
-        if order:
-            return queryset.filter(**key).order_by(f"{order}").last()
-        else:
-            return queryset.filter(**key).last()
+            return await queryset.order_by(order).alast()
 
     @staticmethod
     async def aget_sorted(queryset: QuerySet,
