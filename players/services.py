@@ -84,6 +84,8 @@ class BoostService(BaseService):
     @classmethod
     async def boost_player(cls, request_kwarg: Dict[str, str], request: Request, **kwargs) -> Optional[bool]:
         """Boost with http request"""
+
+        #trouble with docker
         try:
             url = reverse("players:boost_player", kwargs=request_kwarg, request=request)
             async with aiohttp.ClientSession() as session:
@@ -92,6 +94,7 @@ class BoostService(BaseService):
                 return True
         except aiohttp.client_exceptions.ClientResponseError as e:
             logger.error("Can't buff player", exc_info=True)
+
 
 
 class PlayerLevelService(BaseService):

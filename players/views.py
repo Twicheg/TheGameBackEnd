@@ -27,7 +27,7 @@ class PlayerCreateView(CreateAPIView):
         try:
             await PlayerLevelService.set_levels_to_fresh_player(uuid)
         except AssertionError as e:
-            logger.error('The LeveL is empty',exc_info=True)
+            logger.error('The LeveL is empty', exc_info=True)
         return resp
 
 
@@ -67,12 +67,12 @@ class PlayerLevelUp(APIView):
     http_method_names = ["patch"]
 
     async def patch(self, request: Request, *args, **kwargs):
+        boost = request.GET
         result = await PlayerLevelService.level_up(kwargs.get("pk"))
         if result.get("result"):
-            await BoostService.boost_player(kwargs, request,
-                                            title="boost",
-                                            description="new level boost",
-                                            duration=1)
+            if not all([boost.get(i) for i in ['title', "description", "duration"]]):
+                boost = {"title": "boost", "description": "standard new level boost", "duration": 1}
+            await BoostService.create_boost(boost, kwargs.get("pk"))
         return Response(result, status=HTTP_200_OK)
 
 
