@@ -83,11 +83,10 @@ class CSVApi(APIView):
         try:
             ready_csv = await CSVService.export_to_csv()
             response = Response(ready_csv)
-            response.streaming = True
             response['Content-Type'] = 'text/csv'
             response['Content-Disposition'] = 'attachment; filename="players.csv"'
             return response
-        except (ValueError, AssertionError) as e:
+        except (AssertionError) as e:
             logger.error("Something goes wrong in CSVApi", exc_info=True)
             return Response({False: "Сервис временно недоступен"}
                             , status=HTTP_503_SERVICE_UNAVAILABLE)
