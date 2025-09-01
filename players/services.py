@@ -123,8 +123,8 @@ class PlayerLevelService(BaseService):
 
         async def find_new_level(level: int) -> Optional[Model]:
             """Try to find level.order > that"""
-
-            levels = [i.order for i in await cls.dao.aget_list(cls._lvl_queryset)]
+            levels_queryset = await cls.dao.aget_list(cls._lvl_queryset)
+            levels = [i.order async for i in levels_queryset]
             assert any(filter(lambda x: x > level, levels)), "Player have max level"
 
             for lvl in sorted(levels):
@@ -135,20 +135,21 @@ class PlayerLevelService(BaseService):
         if player is None:
             raise NotFound
 
-        current_level = await cls.dao.aget_one(player.playerlevel_set, "is_completed", False)
-        current_level.is_completed = True
-        current_level.completed = datetime.now().date()
-        finished_level_id = current_level.level_id
-        await current_level.asave()
-        player.player_score += current_level.score
-
-        current_order = await cls.dao.aget_one(cls._lvl_queryset, "id", finished_level_id)
-
         try:
+            current_level = await cls.dao.aget_one(player.playerlevel_set, "is_completed", False)
+            assert current_level, "the player has no unfinished levels"
+            current_level.is_completed = True
+            current_level.completed = datetime.now().date()
+            finished_level_id = current_level.level_id
+            await current_level.asave()
+            player.player_score += current_level.score
+
+            current_order = await cls.dao.aget_one(cls._lvl_queryset, "id", finished_level_id)
+
             new_level_model_or_None = await find_new_level(current_order.order)
-        except AssertionError:
+        except AssertionError as e:
             return {"result": False, "description":
-                f"{player.player_id} {player.player_name} на максимальном уровне"}
+                f"{player.player_id} {player.player_name} {str(e)}"}
 
         new_level_rewards_queryset = await cls.dao.aget_list(new_level_model_or_None.levelprize_set)
         await cls.dao.acreate(cls._pll_queryset,
