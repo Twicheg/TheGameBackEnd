@@ -7,7 +7,7 @@ import pandas as pd
 import aiohttp
 from datetime import datetime
 from io import StringIO
-from typing import Optional, Dict, Union, AsyncIterator
+from typing import Optional, Dict, Union, AsyncIterator, List
 from rest_framework.request import Request
 from rest_framework.exceptions import NotFound
 from rest_framework.reverse import reverse
@@ -121,60 +121,84 @@ class PlayerLevelService(BaseService):
     async def level_up(cls, player_id: str) -> Dict[str, Union[str, bool]]:
         """Try set new level to player"""
 
-        async def find_new_level(level: int) -> Optional[Model]:
-            """Try to find level.order > that"""
-            levels_queryset = await cls.dao.aget_list(cls._lvl_queryset)
-            levels = [i.order async for i in levels_queryset]
-            assert any(filter(lambda x: x > level, levels)), "Player have max level"
-
-            for lvl in sorted(levels):
-                if lvl > level:
-                    return await cls.dao.aget_one(cls._lvl_queryset, "order", lvl, ignore_logger=True)
-
         player = await cls.dao.aget_one(cls._pl_queryset, Player, player_id)
+        the_need_to_issue_an_award = False  # необходимость выдать награду
+        rewards_list = [] #Список наград
         if player is None:
             raise NotFound
 
         try:
+            # все записи PlayerLevel для Player
             player_levels_of_player = await cls.dao.aget_list(player.playerlevel_set)
-            # ADRF... [pl.level.order for pl in levels_of_player] не сработает(новый поток или sync_to_async)
+
+            # Список id уровней в queryset(LevelPlayer) для Player
             levels_in_levels_of_player = [i.level_id async for i in player_levels_of_player]
+
+            # Список уровней (ADRF... [pl.level.order for pl in levels_of_player] не сработает(новый поток или sync_to_async))
             levels_from_db = asyncio.gather(
                 *[cls.dao.aget_one(cls._lvl_queryset, Level, i) for i in levels_in_levels_of_player])
 
-            max_level_of_player = max([i for i in await levels_from_db], key=lambda x: x.order)
-
-            current_level_player = await cls.dao.aget_one(player_levels_of_player, 'level', max_level_of_player)
+            # текущий уровень - максимальный из LevelPlayer.level
+            current_level_of_player = max([i for i in await levels_from_db], key=lambda x: x.order)
+            current_level_player = await cls.dao.aget_one(player_levels_of_player, 'level', current_level_of_player)
             assert current_level_player, "Player have not PlayerLevel"
 
-            current_level_player.is_completed = True
+            # фиксируем завершенный уровень
+            if current_level_player.is_completed == False:
+                the_need_to_issue_an_award = True
+                current_level_player.is_completed = True
+
             current_level_player.completed = datetime.now().date()
             await current_level_player.asave()
             player.player_score += current_level_player.score
 
-            new_level_model_or_None = await find_new_level(max_level_of_player.order)
+            try:
+                if the_need_to_issue_an_award:
+                    # все награды за текущий уровень
+                    current_level_prize_queryset = await cls.dao.aget_list(current_level_of_player.levelprize_set)
+                    # выдача наград и сохранение в список для отправки
+                    rewards_list = await LevelPrizeService.give_out_awards(current_level_prize_queryset, player)
+
+                new_level_model_or_None = await LevelService.find_new_level(current_level_of_player.order)
+            except AssertionError as e:
+                if rewards_list:
+                    return {"result": False, "description":
+                        f"{player.player_id} {player.player_name} {str(e)}, но завершил {current_level_of_player.order} и"
+                        f"получил {rewards_list} в награду "}
+                else:
+                    raise e
+
         except AssertionError as e:
             return {"result": False, "description":
                 f"{player.player_id} {player.player_name} {str(e)}"}
 
-        new_level_rewards_queryset = await cls.dao.aget_list(new_level_model_or_None.levelprize_set)
-        await cls.dao.acreate(cls._pll_queryset,
-                              player=player,
-                              level=new_level_model_or_None,
-                              completed=datetime.now().date(),  # PlayerLevel.completed null = False
-                              is_completed=False,
-                              )
+        # новый PlayerLevel с найденным(если) следующем уровнем
+        new_player_level_from_next_level = await cls.dao.acreate(cls._pll_queryset,
+                                                                 player=player,
+                                                                 level=new_level_model_or_None,
+                                                                 completed=datetime.now().date(),
+                                                                 # PlayerLevel.completed null = False
+                                                                 is_completed=False,
+                                                                 )
+        await new_player_level_from_next_level.asave()
+
+        return {"result": True, "description":
+            f"{player.player_id} {player.player_name} поднял уровень до {new_level_model_or_None.order}"
+            f" и получил {rewards_list} в награду за прохождение {current_level_of_player.order} "}
+
+
+class LevelPrizeService(BaseService):
+    @classmethod
+    async def give_out_awards(cls, level_prizes: QuerySet, player: Player) -> List[str]:
+        """Выдача наград за пройденный уровень"""
         rewards_list = []
-        async for lp in new_level_rewards_queryset:
+        async for lp in level_prizes:
             prize = await cls.dao.aget_one(cls._prize_queryset, Prize, lp.prize_id)
             rewards_list += [prize.title]
             assert await player.set_rewards(prize.title), "Can't reward player"
             lp.received = datetime.now().date()
             await lp.asave()
-
-        return {"result": True, "description":
-            f"{player.player_id} {player.player_name} поднял уровень до {new_level_model_or_None.order}"
-            f" и получил {rewards_list} в подарок"}
+        return rewards_list
 
 
 class LevelService(BaseService):
@@ -182,6 +206,17 @@ class LevelService(BaseService):
     def get_level(cls, pk: str) -> int:
         """Получение данных в отдельном потоке, потому-что ADRF ... """
         return cls.dao.t_pool(cls.dao.get_one, cls._lvl_queryset, "id", pk).order
+
+    @classmethod
+    async def find_new_level(cls, level: int) -> Optional[Model]:
+        """Try to find level.order > that"""
+        levels_queryset = await cls.dao.aget_list(cls._lvl_queryset)
+        levels = [i.order async for i in levels_queryset]
+        assert any(filter(lambda x: x > level, levels)), "У игрока максимальный уровень"
+
+        for lvl in sorted(levels):
+            if lvl > level:
+                return await cls.dao.aget_one(cls._lvl_queryset, "order", lvl, ignore_logger=True)
 
 
 class CSVService(BaseService):
