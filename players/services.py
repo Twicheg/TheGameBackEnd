@@ -136,17 +136,23 @@ class PlayerLevelService(BaseService):
             raise NotFound
 
         try:
-            current_level = await cls.dao.aget_one(player.playerlevel_set, "is_completed", False)
-            assert current_level, "the player has no unfinished levels"
-            current_level.is_completed = True
-            current_level.completed = datetime.now().date()
-            finished_level_id = current_level.level_id
-            await current_level.asave()
-            player.player_score += current_level.score
+            player_levels_of_player = await cls.dao.aget_list(player.playerlevel_set)
+            # ADRF... [pl.level.order for pl in levels_of_player] не сработает(новый поток или sync_to_async)
+            levels_in_levels_of_player = [i.level_id async for i in player_levels_of_player]
+            levels_from_db = asyncio.gather(
+                *[cls.dao.aget_one(cls._lvl_queryset, Level, i) for i in levels_in_levels_of_player])
 
-            current_order = await cls.dao.aget_one(cls._lvl_queryset, "id", finished_level_id)
+            max_level_of_player = max([i for i in await levels_from_db], key=lambda x: x.order)
 
-            new_level_model_or_None = await find_new_level(current_order.order)
+            current_level_player = await cls.dao.aget_one(player_levels_of_player, 'level', max_level_of_player)
+            assert current_level_player, "Player have not PlayerLevel"
+
+            current_level_player.is_completed = True
+            current_level_player.completed = datetime.now().date()
+            await current_level_player.asave()
+            player.player_score += current_level_player.score
+
+            new_level_model_or_None = await find_new_level(max_level_of_player.order)
         except AssertionError as e:
             return {"result": False, "description":
                 f"{player.player_id} {player.player_name} {str(e)}"}
