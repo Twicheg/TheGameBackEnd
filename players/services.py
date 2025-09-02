@@ -1,8 +1,6 @@
 import asyncio
 import logging
 import csv
-from sys import exc_info
-
 import pandas as pd
 import aiohttp
 from datetime import datetime
@@ -92,7 +90,7 @@ class BoostService(BaseService):
                 data = {**kwargs}
                 await session.post(url=url, json=data)
                 return True
-        except aiohttp.client_exceptions.ClientResponseError as e:
+        except aiohttp.client_exceptions.ClientConnectionError as e:
             logger.error("Can't buff player", exc_info=True)
 
 
