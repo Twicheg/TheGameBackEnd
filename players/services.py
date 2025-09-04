@@ -1,6 +1,9 @@
 import asyncio
+import functools
 import logging
 import csv
+from functools import partial
+
 import pandas as pd
 import aiohttp
 from datetime import datetime
@@ -83,7 +86,7 @@ class BoostService(BaseService):
     async def boost_player(cls, request_kwarg: Dict[str, str], request: Request, **kwargs) -> Optional[bool]:
         """Boost with http request"""
 
-        #trouble with docker
+        # trouble with docker
         try:
             url = reverse("players:boost_player", kwargs=request_kwarg, request=request)
             async with aiohttp.ClientSession() as session:
@@ -92,7 +95,6 @@ class BoostService(BaseService):
                 return True
         except aiohttp.client_exceptions.ClientConnectionError as e:
             logger.error("Can't buff player", exc_info=True)
-
 
 
 class PlayerLevelService(BaseService):
@@ -124,7 +126,7 @@ class PlayerLevelService(BaseService):
 
         player = await cls.dao.aget_one(cls._pl_queryset, Player, player_id)
         the_need_to_issue_an_award = False  # необходимость выдать награду
-        rewards_list = [] #Список наград
+        rewards_list = []  # Список наград
         if player is None:
             raise NotFound
 
@@ -152,6 +154,7 @@ class PlayerLevelService(BaseService):
             current_level_player.completed = datetime.now().date()
             await current_level_player.asave()
             player.player_score += current_level_player.score
+            await player.asave()
 
             try:
                 if the_need_to_issue_an_award:
@@ -250,7 +253,7 @@ class CSVService(BaseService):
     @classmethod
     async def export_to_csv(cls):
         """ Экспорт данных игрока в CSV. """
-        workers = []
+        tasks: list[partial] = []
         count = await cls.dao.aget_count(cls._pl_queryset)
         chunk = 500
 
@@ -267,22 +270,19 @@ class CSVService(BaseService):
                 async for p in iterator:
                     _list.append(p)
                     if len(_list) == chunk:
-                        workers.append(cls.dao.async_processes_work(asyncio.get_running_loop(),
-                                                                    cls.csv_work, _list.copy()))
+                        tasks.append(partial(cls.csv_work, _list.copy()))
                         _list = []
                 else:
-                    workers.append(cls.dao.async_processes_work(asyncio.get_running_loop(),
-                                                                cls.csv_work, _list))
+                    tasks.append(partial(cls.csv_work, _list))
 
             case x if x < chunk:
                 _list = []
                 async for p in iterator:
                     _list.append(p)
                 else:
-                    workers.append(cls.dao.async_processes_work(asyncio.get_running_loop(),
-                                                                cls.csv_work, _list))
+                    tasks.append(partial(cls.csv_work, _list))
 
-        result = await asyncio.gather(*workers)
+        result = await cls.dao.async_processes_work(asyncio.get_running_loop(), tasks)
         assert result, "empty result after asyncio processes"
-        csv_pd_list = [pd.read_csv(i.result()) for i in result]
+        csv_pd_list = [pd.read_csv(i) for i in result]
         return pd.concat(csv_pd_list, ignore_index=True)
