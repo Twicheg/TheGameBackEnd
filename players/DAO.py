@@ -1,10 +1,12 @@
 import asyncio
+import collections
 import functools
 import logging
 
 from asyncio import AbstractEventLoop
 from concurrent.futures.process import ProcessPoolExecutor
-from typing import Union, Optional, AsyncIterator, Callable, Any, Iterable
+from functools import partial
+from typing import Union, Optional, AsyncIterator, Callable, Any, List
 from asgiref.sync import sync_to_async
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from concurrent.futures import ThreadPoolExecutor
@@ -114,7 +116,7 @@ class AsyncDAO(metaclass=StaticMethodMaker):
             res = executor.submit(func, *arg)
             return res.result()
 
-    async def async_processes_work(loop: AbstractEventLoop, partials: Iterable) -> Any:
+    async def async_processes_work(loop: AbstractEventLoop, partials: List[Callable]) -> List:
         task = []
         with ProcessPoolExecutor() as executor:
             for part in partials:
